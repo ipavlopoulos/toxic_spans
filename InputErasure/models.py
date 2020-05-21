@@ -8,14 +8,21 @@ class Mask:
         self.classifier = classifier
         self.mask = mask
         self.reshape_predictions = reshape_predictions
-        prediction = self.classifier.predict([text])
-        self.initial_score = prediction.reshape(1, -1)[0, 0] if reshape_predictions else prediction[0]
+        self.initial_score = self.clf_predict([text])
         self.words = self.classifier.tokenise(text)
         self.ablations, self.indices = self.create_ablations()
-        self.scores = self.score_ablations()
+        self.scores = self.clf_predict(self.ablations)
         self.scores_decrease = [(self.initial_score - s) / self.initial_score for s in self.scores]
         self.threshold = threshold
         self.black_list = self.get_black_list()
+
+    def clf_predict(self, texts):
+        predictions = self.classifier.predict(texts)
+        if self.reshape_predictions:
+            predictions = predictions.reshape(1, -1)[0]
+        if len(texts) == 1:
+            return predictions[0]
+        return predictions
 
     def create_ablations(self):
         ablations, indices = [], []
@@ -25,9 +32,6 @@ class Mask:
             ablations.append(" ".join(words_copy))
             indices.append(i)
         return ablations, indices
-
-    def score_ablations(self):
-        return self.classifier.predict(self.ablations).reshape(1, -1)[0]
 
     def get_black_list(self):
         return [self.indices[i] for i, s in enumerate(self.scores_decrease) if s > self.threshold]
