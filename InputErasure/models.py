@@ -12,7 +12,8 @@ class Mask:
         self.words = self.classifier.tokenise(text)
         self.ablations, self.indices = self.create_ablations()
         self.scores = self.clf_predict(self.ablations)
-        self.scores_decrease = [(self.initial_score - s) / self.initial_score for s in self.scores]
+        self.e = 10e-05
+        self.scores_decrease = [(self.initial_score - s) / (self.initial_score+self.e) for s in self.scores]
         self.threshold = threshold
         self.black_list = self.get_black_list()
 
