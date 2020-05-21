@@ -3,11 +3,13 @@ import pandas as pd
 
 class Mask:
 
-    def __init__(self, classifier, text, class_names=[0, 1], mask=u"[mask]", threshold=0.2):
+    def __init__(self, classifier, text, class_names=[0, 1], mask=u"[mask]", threshold=0.2, reshape_predictions=True):
         self.class_names = class_names
         self.classifier = classifier
         self.mask = mask
-        self.initial_score = self.classifier.predict([text]).reshape(1, -1)[0, 0]
+        self.reshape_predictions = reshape_predictions
+        prediction = self.classifier.predict([text])
+        self.initial_score = prediction.reshape(1, -1)[0, 0] if reshape_predictions else prediction[0]
         self.words = self.classifier.tokenise(text)
         self.ablations, self.indices = self.create_ablations()
         self.scores = self.score_ablations()
