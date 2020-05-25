@@ -3,10 +3,11 @@ import pandas as pd
 
 class Mask:
 
-    def __init__(self, classifier, text, class_names=[0, 1], mask=u"[mask]", threshold=0.2, reshape_predictions=True):
+    def __init__(self, classifier, text, one_by_one=False, class_names=[0, 1], mask=u"[mask]", threshold=0.2, reshape_predictions=True):
         self.class_names = class_names
         self.classifier = classifier
         self.mask = mask
+        self.one_by_one = one_by_one
         self.reshape_predictions = reshape_predictions
         self.initial_score = self.clf_predict([text])
         self.words = self.classifier.tokenise(text)
@@ -18,7 +19,10 @@ class Mask:
         self.black_list = self.get_black_list()
 
     def clf_predict(self, texts):
-        predictions = self.classifier.predict(texts)
+        if self.one_by_one:
+            predictions = [self.classifier.predict([t])[0] for t in texts]
+        else:
+            predictions = self.classifier.predict(texts)
         if self.reshape_predictions:
             predictions = predictions.reshape(1, -1)[0]
         if len(texts) == 1:
