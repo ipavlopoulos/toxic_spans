@@ -42,6 +42,6 @@ class Mask:
 
     def get_as_pandas(self):
         scores_pd = pd.DataFrame({"word": self.words, "indices": self.indices, "score_dec": self.scores_decrease})
-        scores_pd = scores_pd.sort_values(by=["score"])
+        scores_pd = scores_pd.sort_values(by=["score_dec"])
         return scores_pd
 
