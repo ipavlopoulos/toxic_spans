@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-class Mask:
+class InputErasure:
 
     def __init__(self, classifier, text, one_by_one=False, class_names=[0, 1], mask=u"[mask]", threshold=0.2, reshape_predictions=True):
         self.class_names = class_names
