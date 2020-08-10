@@ -29,25 +29,21 @@ def evaluate(pred, gold):
     :return:
     """
     # read the predictions
-    f = open(pred, "rb")
-    pred_lines = f.readlines()
-    f.close()
+    pred_lines = pred.readlines()
     # read the ground truth
-    f = open(gold, "rb")
-    gold_lines = f.readlines()
-    f.close()
+    gold_lines = gold.readlines()
 
     # only when the same number of lines exists
     if (len(pred_lines) == len(gold_lines)):
         data_dic = {}
-        for line in gold_lines:
+        for n, line in enumerate(gold_lines):
             parts = line.split('\t')
             if len(parts) == 2:
                 data_dic[int(parts[0])] = [literal_eval(parts[1])]
             else:
-                sys.exit('Format problem.')
+                raise ValueError('Format problem for gold line %d.', n)
 
-        for line in pred_lines:
+        for n, line in enumerate(pred_lines):
             parts = line.split('\t')
             if len(parts) == 2:
                 if int(parts[0]) in data_dic:
@@ -57,9 +53,9 @@ def evaluate(pred, gold):
                         # Invalid predictions are replaced by a default value
                         data_dic[int(parts[0])].append([])
                 else:
-                    sys.exit('Invalid text id.')
+                    raise ValueError('Invalid text id for pred line %d.', n)
             else:
-                sys.exit('Format problem.')
+                raise ValueError('Format problem for pred line %d.', n)
 
         # lists storing gold and prediction scores
         scores = []
@@ -88,7 +84,8 @@ def main(argv):
     submission_path = os.path.join(input_dir, 'res', 'spans-pred.txt')
     if not os.path.exists(submission_path):
         sys.exit('Could not find submission file {0}'.format(submission_path))
-    scores = evaluate(submission_path, truth_path)
+    with open(submission_path) as pred, open(truth_path) as gold:
+      scores = evaluate(pred, gold)
 
     # the scores for the leaderboard must be in a file named "scores.txt"
     # https://github.com/codalab/codalab-competitions/wiki/User_Building-a-Scoring-Program-for-a-Competition#directory-structure-for-submissions
