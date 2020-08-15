@@ -89,7 +89,7 @@ class InputErasure:
         toxic_offsets = []
         for i, word in enumerate(self.words):
             if i in set(self.black_list):
-                toxic_offsets.extend(list(range(current_offset, len(word))))
+                toxic_offsets.extend(list(range(current_offset, current_offset+len(word))))
             current_offset += len(word) + 1
         return toxic_offsets
 
