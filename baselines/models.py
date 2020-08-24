@@ -2,15 +2,27 @@ import pandas as pd
 import random
 
 
+def write_offsets(offsets, filename="answer.txt"):
+    """
+    Static method to write out the offsets of the toxic spans.
+    :param offsets: list of (lists of) offsets
+    :param filename: the name of the file to write to
+    :return:
+    """
+    with open(filename) as o:
+        for offsets in offsets:
+            o.write(offsets + "\n")
+
+
 class Random:
 
-    def __init__(self, text):
+    def __init__(self, texts):
         """
         Random baseline for toxic span detection.
         Returns toxic offsets at random.
         :param text:
         """
-        self.toxic_offsets = [i for i, ch in enumerate(text) if random.random()>0.5]
+        self.toxic_offsets = [[i for i, ch in enumerate(text) if random.random()>0.5] for text in texts]
 
     def get_toxic_offsets(self):
         return self.toxic_offsets
