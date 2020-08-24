@@ -15,10 +15,10 @@ def f1(predictions, gold):
     :return: a score between 0 and 1
     """
     if len(gold) == 0:
-        return 1 if len(predictions)==0 else 0
+        return 1. if len(predictions) == 0 else 0.
     nom = 2*len(set(predictions).intersection(set(gold)))
     denom = len(set(predictions))+len(set(gold))
-    return nom/denom
+    return float(nom)/float(denom)
 
 
 def evaluate(pred, gold):
