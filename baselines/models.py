@@ -2,6 +2,7 @@ import random
 import re
 import lime
 import pandas as pd
+import numpy as np
 from lime import lime_text
 from lime.lime_text import LimeTextExplainer
 
