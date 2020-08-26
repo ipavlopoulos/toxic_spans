@@ -125,7 +125,7 @@ class LimeUsd(InputErasure):
                  classifier,
                  text,
                  one_by_one=False,
-                 tokenise=lambda txt: re.split("\W+", txt),
+                 tokenise=lambda txt: [w for w in re.split("\W+", txt) if len(w)>0],
                  class_names=[0, 1],
                  mask=u"[mask]",
                  threshold=0.2,
@@ -161,9 +161,5 @@ class LimeUsd(InputErasure):
         num_of_feats = len(words)
         predictor = lambda texts: np.array([[0, p] for p in self.classifier.predict(texts)])
         explain = self.explainer.explain_instance(self.text, predictor, num_features=num_of_feats)
-        words, scores = zip(*explain.as_list())
-        word_indices, word_scores = zip(*explain.local_exp[1])
-        index2word = dict(zip(word_indices, words)) # the two are aligned
-        index2score = dict(zip(word_indices, word_scores))
-        assert self.words == [index2word[i] for i in range(num_of_feats)]
-        return [index2score[i] for i in range(num_of_feats)]
+        word2score = dict(zip(*explain.as_list()))
+        return [word2score[w] for w in self.words]
