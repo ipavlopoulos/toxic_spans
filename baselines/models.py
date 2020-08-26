@@ -1,5 +1,4 @@
 import random
-import re
 import lime
 import pandas as pd
 import numpy as np
@@ -39,7 +38,7 @@ class InputErasure:
                  classifier,
                  text,
                  one_by_one=False,
-                 tokenise=lambda txt: re.split("\W+", txt),
+                 tokenise=lambda txt: txt.split(),
                  class_names=[0, 1],
                  mask=u"[mask]",
                  threshold=0.2,
@@ -125,7 +124,7 @@ class LimeUsd(InputErasure):
                  classifier,
                  text,
                  one_by_one=False,
-                 tokenise=lambda txt: [w for w in re.split("\W+", txt) if len(w)>0],
+                 tokenise=lambda txt: txt.split(),
                  class_names=[0, 1],
                  mask=u"[mask]",
                  threshold=0.2,
@@ -148,9 +147,9 @@ class LimeUsd(InputErasure):
         self.one_by_one = one_by_one
         self.reshape_predictions = reshape_predictions
         self.text = text
-        self.explainer = LimeTextExplainer(class_names=self.class_names)
         self.initial_score = self.clf_predict([text])
         self.tokenise = tokenise
+        self.explainer = LimeTextExplainer(class_names=self.class_names, split_expression=tokenise)
         self.words = self.tokenise(text)
         self.ablations, self.indices = self.create_ablations()
         self.scores_decrease = self.lime_explain(self.words)
@@ -161,5 +160,5 @@ class LimeUsd(InputErasure):
         num_of_feats = len(words)
         predictor = lambda texts: np.array([[0, p] for p in self.classifier.predict(texts)])
         explain = self.explainer.explain_instance(self.text, predictor, num_features=num_of_feats)
-        word2score = dict(zip(*explain.as_list()))
+        word2score = dict(explain.as_list())
         return [word2score[w] for w in self.words]
