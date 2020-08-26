@@ -1,5 +1,9 @@
-import pandas as pd
 import random
+import re
+import lime
+import pandas as pd
+from lime import lime_text
+from lime.lime_text import LimeTextExplainer
 
 
 def write_offsets(offsets, filename="answer.txt"):
@@ -34,7 +38,7 @@ class InputErasure:
                  classifier,
                  text,
                  one_by_one=False,
-                 tokenise=lambda txt: txt.split(),
+                 tokenise=lambda txt: re.split("\W+", txt),
                  class_names=[0, 1],
                  mask=u"[mask]",
                  threshold=0.2,
@@ -113,3 +117,51 @@ class InputErasure:
         scores_pd = scores_pd.sort_values(by=["score_dec"])
         return scores_pd
 
+
+class LimeUsd(InputErasure):
+
+    def __init__(self,
+                 classifier,
+                 text,
+                 one_by_one=False,
+                 tokenise=lambda txt: re.split("\W+", txt),
+                 class_names=[0, 1],
+                 mask=u"[mask]",
+                 threshold=0.2,
+                 reshape_predictions=True):
+        """
+        Given a classifier and a tokenisation method LimeUsd returns the toxic words and the respective offsets.
+        This implementation is based on LIME.
+        :param classifier: any toxicity classifier that predicts a text as toxic or not
+        :param text: the textual input (sentence or document) as a string
+        :param one_by_one: some classifiers may require one by one classification when scoring the "ablated" texts.
+        :param tokenise: by default splits the words on empty space -- same as LIME
+        :param class_names: by default "toxic" is represented by 1 and "civil" by 0
+        :param mask: the pseudo token to mask the toxic word (for visualisation purposes)
+        :param threshold: above this value the text is predicted toxic (default 0.2)
+        :param reshape_predictions: flattens the output, some classifiers may required this to be set to False
+        """
+        self.class_names = class_names
+        self.classifier = classifier
+        self.mask = mask
+        self.one_by_one = one_by_one
+        self.reshape_predictions = reshape_predictions
+        self.explainer = LimeTextExplainer(class_names=self.class_names)
+        self.initial_score = self.clf_predict([text])
+        self.tokenise = tokenise
+        self.words = self.tokenise(text)
+        self.ablations, self.indices = self.create_ablations()
+        self.scores_decrease = self.lime_explain(self.words)
+        self.threshold = threshold
+        self.black_list = self.get_black_list()
+
+    def lime_explain(self, words):
+        num_of_feats = len(words)
+        predictor = lambda texts: np.array([[0, p] for p in self.classifier.predict(texts)])
+        explain = self.explainer.explain_instance(self.text, predictor, num_features=num_of_feats)
+        words, scores = zip(*explain.as_list())
+        word_indices, word_scores = zip(*explain.local_exp[1])
+        index2word = dict(zip(word_indices, words)) # the two are aligned
+        index2score = dict(zip(word_indices, word_scores))
+        assert words == [index2word[i] for i in range(num_of_feats)]
+        return [index2score[i] for i in range(num_of_feats)]
