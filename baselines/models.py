@@ -146,6 +146,7 @@ class LimeUsd(InputErasure):
         self.mask = mask
         self.one_by_one = one_by_one
         self.reshape_predictions = reshape_predictions
+        self.text = text
         self.explainer = LimeTextExplainer(class_names=self.class_names)
         self.initial_score = self.clf_predict([text])
         self.tokenise = tokenise
