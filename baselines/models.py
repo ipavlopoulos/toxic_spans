@@ -165,5 +165,5 @@ class LimeUsd(InputErasure):
         word_indices, word_scores = zip(*explain.local_exp[1])
         index2word = dict(zip(word_indices, words)) # the two are aligned
         index2score = dict(zip(word_indices, word_scores))
-        assert words == [index2word[i] for i in range(num_of_feats)]
+        assert self.words == [index2word[i] for i in range(num_of_feats)]
         return [index2score[i] for i in range(num_of_feats)]
