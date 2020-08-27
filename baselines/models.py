@@ -1,7 +1,9 @@
 import random
+random.seed(a=2021)
 import lime
 import pandas as pd
 import numpy as np
+np.random.seed(seed=2021)
 from lime import lime_text
 from lime.lime_text import LimeTextExplainer
 
