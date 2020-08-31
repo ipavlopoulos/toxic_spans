@@ -9,7 +9,8 @@ from lime.lime_text import LimeTextExplainer
 from keras.preprocessing.sequence import pad_sequences
 from keras.models import Model, Input
 from keras.layers import GRU, LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional
-
+from keras.callbacks import EarlyStopping
+from keras.utils import plot_model
 
 def write_offsets(offsets, filename="answer.txt"):
     """
