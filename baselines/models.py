@@ -6,6 +6,9 @@ import numpy as np
 np.random.seed(seed=2021)
 from lime import lime_text
 from lime.lime_text import LimeTextExplainer
+from keras.preprocessing.sequence import pad_sequences
+from keras.models import Model, Input
+from keras.layers import GRU, LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional
 
 
 def write_offsets(offsets, filename="answer.txt"):
@@ -166,29 +169,29 @@ class LimeUsd(InputErasure):
         return [word2score[w] for w in self.words]
 
 
-class SuperSequenceLabeler:
-    from keras.preprocessing.sequence import pad_sequences
-    from keras.models import Model, Input
-    from keras.layers import GRU, LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional
+class RNNSL:
 
-    def __init__(self, maxlen=128, w_embed_size=200, h_embed_size=200, dropout=0.1):
+    def __init__(self, maxlen=128, w_embed_size=200, padding="post", h_embed_size=200, dropout=0.1, patience=1, plot=True, max_epochs=100):
         self.maxlen = maxlen
         self.w_embed_size = w_embed_size
         self.h_embed_size = h_embed_size
         self.dropout = dropout
-        self.tokenizer = Tokenizer()
         self.vocab_size = -1
+        self.padding = padding
+        self.patience = patience
         self.model = None
         self.w2i = {}
+        self.epochs = max_epochs
         self.i2w = {}
         self.vocab = []
+        self.show_the_model = plot
         self.threshold = 0.2
         self.unk_token = "[unk]"
         self.pad_token = "[pad]"
 
     def build(self):
         input = Input(shape=(self.maxlen,))
-        model = Embedding(input_dim=self.vocab_size, output_dim=self.w_embed_size, input_length=self.maxlen, mask_zero=True)(input)  # 50-dim embedding
+        model = Embedding(input_dim=self.vocab_size, output_dim=self.w_embed_size, input_length=self.maxlen)(input)  # 50-dim embedding
         model = Dropout(self.dropout)(model)
         model = Bidirectional(LSTM(units=self.h_embed_size, return_sequences=True, recurrent_dropout=self.dropout))(model)  # variational biLSTM
         output = TimeDistributed(Dense(1, activation="sigmoid"))(model)
@@ -197,19 +200,28 @@ class SuperSequenceLabeler:
     def predict(self, tokenized_texts):
         return self.model.predict(self.to_sequences(tokenized_texts))
 
+    def get_toxic_offsets(self, tokenized_texts):
+        text_predictions = self.predict(tokenized_texts)
+        assert self.padding == "post"
+        output = []
+        for tokens, scores in list(zip(tokenized_texts, text_predictions)):
+          decisions = [1 if scores[i][0]>self.threshold else 0 for i in range(min(len(tokens),self.maxlen))]
+          output.append(decisions)
+        return output
+
     def set_up_preprocessing(self, tokenized_texts):
         self.vocab = list(set([w for txt in tokenized_texts for w in txt]))
         self.vocab_size = len(self.vocab) + 1
         self.w2i = {w: i+2 for i,w in enumerate(self.vocab)}
         self.w2i[self.unk_token] = 1
         self.w2i[self.pad_token] = 0
-        self.i2w = {i+2: self.w2i[w] for i in enumerate(self.vocab)}
+        self.i2w = {i+2: self.w2i[w] for i,w in enumerate(self.vocab)}
         self.i2w[1] = self.unk_token
         self.i2w[0] = self.pad_token
 
     def to_sequences(self, tokenized_texts):
         x = [[self.w2i[w] if w in self.w2i else 1 for w in t] for t in tokenized_texts]
-        x = pad_sequences(sequences=x, maxlen=self.maxlen, padding="post", value=0)  # padding
+        x = pad_sequences(sequences=x, maxlen=self.maxlen, padding=self.padding, value=0)  # padding
         return x
 
     def fit(self, tokenized_texts, token_labels, validation_data=None):
@@ -217,18 +229,22 @@ class SuperSequenceLabeler:
         self.set_up_preprocessing(tokenized_texts)
         # turn the tokenized texts and token labels to padded sequences of indices
         x = self.to_sequences(tokenized_texts)
-        y = pad_sequences(maxlen=maxlen, sequences=token_labels, padding="post", value=0)
+        y = pad_sequences(maxlen=self.maxlen, sequences=token_labels, padding=self.padding, value=0)
         # build the model and compile it
-        self.model = self.build_lstm()
+        self.model = self.build()
+        if self.show_the_model:
+            print(self.model.summary())
+            plot_model(self.model, show_shapes=True, to_file="neural_sequence_labeler.model.png")
         self.model.compile(optimizer="rmsprop", loss="categorical_crossentropy", metrics=["accuracy"])
+        early = EarlyStopping(monitor="val_loss", patience=self.patience, verbose=1, min_delta=0.0001, restore_best_weights=True)
         # start training
         if validation_data is not None:
             assert len(validation_data) == 2
             vx = self.to_sequences(validation_data[0])
-            vy = pad_sequences(maxlen=maxlen, sequences=validation_data[1], padding="post", value=0)
-            history = self.model.fit(x, y, batch_size=32, epochs=1, validation_data=(vx, vy), verbose=1)
+            vy = pad_sequences(maxlen=self.maxlen, sequences=validation_data[1], padding="post", value=0)
+            history = self.model.fit(x, y, batch_size=32, epochs=self.epochs, validation_data=(vx, vy), verbose=1, callbacks=[early])
         else:
-            history = self.model.fit(x, y, batch_size=32, epochs=1, validation_split=0.1, verbose=1)
+            history = self.model.fit(x, y, batch_size=32, epochs=self.epochs, validation_split=0.1, verbose=1, callbacks=[early])
         return pd.DataFrame(history.history)
 
     def get_toxic_spans(self, tokenized_texts):
@@ -238,7 +254,7 @@ class SuperSequenceLabeler:
     def tune_threshold(self, validation_data, evaluator, sensitivity=10e-3):
         assert len(validation_data) == 2 & self.model is not None
         vx = self.to_sequences(validation_data[0])
-        vy = pad_sequences(maxlen=maxlen, sequences=validation_data[1], padding="post", value=0)
+        vy = pad_sequences(maxlen=maxlen, sequences=validation_data[1], padding=self.padding, value=0)
         predictions = self.model.predict(vx)
         decisions = predictions > self.threshold
         opt_score = evaluator(decisions, vy)
