@@ -192,7 +192,7 @@ class RNNSL:
 
     def build(self):
         input = Input(shape=(self.maxlen,))
-        model = Embedding(input_dim=self.vocab_size, output_dim=self.w_embed_size, input_length=self.maxlen)(input)  # 50-dim embedding
+        model = Embedding(input_dim=self.vocab_size+1, output_dim=self.w_embed_size, input_length=self.maxlen)(input)  # 50-dim embedding
         model = Dropout(self.dropout)(model)
         model = Bidirectional(LSTM(units=self.h_embed_size, return_sequences=True, recurrent_dropout=self.dropout))(model)  # variational biLSTM
         output = TimeDistributed(Dense(1, activation="sigmoid"))(model)
