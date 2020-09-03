@@ -225,7 +225,7 @@ class RNNSL:
         x = pad_sequences(sequences=x, maxlen=self.maxlen, padding=self.padding, value=0)  # padding
         return x
 
-    def fit(self, tokenized_texts, token_labels, validation_data=None, monitor="val_loss"):
+    def fit(self, tokenized_texts, token_labels, validation_data=None, monitor="val_accuracy"):
         # set up the vocabulary and the related methods
         self.set_up_preprocessing(tokenized_texts)
         # turn the tokenized texts and token labels to padded sequences of indices
@@ -237,7 +237,8 @@ class RNNSL:
             print(self.model.summary())
             plot_model(self.model, show_shapes=True, to_file="neural_sequence_labeler.model.png")
         self.model.compile(optimizer="rmsprop", loss="categorical_crossentropy", metrics=["accuracy"])
-        early = EarlyStopping(monitor=monitor, mode="auto", patience=self.patience, verbose=1, min_delta=0.001, restore_best_weights=True)
+        mode = "max" if monitor == "val_accuracy" else "min"
+        early = EarlyStopping(monitor=monitor, mode=mode, patience=self.patience, verbose=1, min_delta=0.001, restore_best_weights=True)
         # start training
         if validation_data is not None:
             assert len(validation_data) == 2
