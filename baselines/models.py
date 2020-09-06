@@ -251,7 +251,7 @@ class RNNSL:
         return pd.DataFrame(history.history)
 
     def tune_threshold(self, validation_data, evaluator, sensitivity=10e-3):
-        assert len(validation_data) == 2 & self.model is not None
+        assert len(validation_data) == 2 and self.model is not None
         vx = self.to_sequences(validation_data[0])
         vy = pad_sequences(maxlen=maxlen, sequences=validation_data[1], padding=self.padding, value=0)
         predictions = self.model.predict(vx)
