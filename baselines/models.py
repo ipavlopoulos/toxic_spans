@@ -186,7 +186,7 @@ class RNNSL:
         self.i2w = {}
         self.vocab = []
         self.show_the_model = plot
-        self.threshold = 0.2
+        self.threshold = 0.5
         self.unk_token = "[unk]"
         self.pad_token = "[pad]"
 
@@ -198,15 +198,16 @@ class RNNSL:
         output = TimeDistributed(Dense(2, activation="sigmoid"))(model)
         return Model(input, output)
 
-    def predict(self, tokenized_texts):
-        return self.model.predict(self.to_sequences(tokenized_texts))[:,1]
+    def predict(self, tokenized_texts, class_num=1):
+        predictions = self.model.predict(self.to_sequences(tokenized_texts))[:,:,class_num]
+        return [p.flatten() for p in predictions]
 
     def get_toxic_offsets(self, tokenized_texts):
         text_predictions = self.predict(tokenized_texts)
         assert self.padding == "post"
         output = []
         for tokens, scores in list(zip(tokenized_texts, text_predictions)):
-          decisions = [1 if scores[i][0]>self.threshold else 0 for i in range(min(len(tokens),self.maxlen))]
+          decisions = [1 if scores[i]>self.threshold else 0 for i in range(min(len(tokens),self.maxlen))]
           output.append(decisions)
         return output
 
@@ -218,14 +219,14 @@ class RNNSL:
         #self.w2i[self.pad_token] = 0
         self.i2w = {i+2: self.w2i[w] for i,w in enumerate(self.vocab)}
         self.i2w[1] = self.unk_token
-        self.i2w[0] = self.pad_token
+        #self.i2w[0] = self.pad_token
 
     def to_sequences(self, tokenized_texts):
         x = [[self.w2i[w] if w in self.w2i else 1 for w in t] for t in tokenized_texts]
         x = pad_sequences(sequences=x, maxlen=self.maxlen, padding=self.padding, value=0)  # padding
         return x
 
-    def fit(self, tokenized_texts, token_labels, validation_data=None, monitor="val_acc"):
+    def fit(self, tokenized_texts, token_labels, validation_data=None, monitor="val_loss"):
         # set up the vocabulary and the related methods
         self.set_up_preprocessing(tokenized_texts)
         # turn the tokenized texts and token labels to padded sequences of indices
@@ -237,7 +238,7 @@ class RNNSL:
             print(self.model.summary())
             plot_model(self.model, show_shapes=True, to_file="neural_sequence_labeler.model.png")
         self.model.compile(optimizer="rmsprop", loss="categorical_crossentropy", metrics=["accuracy"])
-        #mode = "max" if monitor == "val_acc" else "min"
+        #mode = "max" if monitor == "val_accuracy" else "min"
         early = EarlyStopping(monitor=monitor, patience=self.patience, verbose=1, min_delta=0.001, restore_best_weights=True)
         # start training
         if validation_data is not None:
@@ -248,10 +249,6 @@ class RNNSL:
         else:
             history = self.model.fit(x, y, batch_size=32, epochs=self.epochs, validation_split=0.1, verbose=1, callbacks=[early])
         return pd.DataFrame(history.history)
-
-    def get_toxic_spans(self, tokenized_texts):
-        scored_texts = self.predict(tokenized_texts)
-        return scored_texts > self.threshold
 
     def tune_threshold(self, validation_data, evaluator, sensitivity=10e-3):
         assert len(validation_data) == 2 & self.model is not None
