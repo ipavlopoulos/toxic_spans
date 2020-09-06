@@ -199,7 +199,7 @@ class RNNSL:
         return Model(input, output)
 
     def predict(self, tokenized_texts):
-        return self.model.predict(self.to_sequences(tokenized_texts))[1]
+        return self.model.predict(self.to_sequences(tokenized_texts))[:,1]
 
     def get_toxic_offsets(self, tokenized_texts):
         text_predictions = self.predict(tokenized_texts)
