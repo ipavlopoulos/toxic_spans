@@ -192,14 +192,14 @@ class RNNSL:
 
     def build(self):
         input = Input(shape=(self.maxlen,))
-        model = Embedding(input_dim=self.vocab_size+1, output_dim=self.w_embed_size, input_length=self.maxlen)(input)  # 50-dim embedding
+        model = Embedding(input_dim=self.vocab_size+1, output_dim=self.w_embed_size, input_length=self.maxlen, mask_zero=True)(input)  # 50-dim embedding
         model = Dropout(self.dropout)(model)
         model = Bidirectional(LSTM(units=self.h_embed_size, return_sequences=True, recurrent_dropout=self.dropout))(model)  # variational biLSTM
-        output = TimeDistributed(Dense(1, activation="sigmoid"))(model)
+        output = TimeDistributed(Dense(2, activation="sigmoid"))(model)
         return Model(input, output)
 
     def predict(self, tokenized_texts):
-        return self.model.predict(self.to_sequences(tokenized_texts))
+        return self.model.predict(self.to_sequences(tokenized_texts))[1]
 
     def get_toxic_offsets(self, tokenized_texts):
         text_predictions = self.predict(tokenized_texts)
@@ -215,7 +215,7 @@ class RNNSL:
         self.vocab_size = len(self.vocab) + 1
         self.w2i = {w: i+2 for i,w in enumerate(self.vocab)}
         self.w2i[self.unk_token] = 1
-        self.w2i[self.pad_token] = 0
+        #self.w2i[self.pad_token] = 0
         self.i2w = {i+2: self.w2i[w] for i,w in enumerate(self.vocab)}
         self.i2w[1] = self.unk_token
         self.i2w[0] = self.pad_token
