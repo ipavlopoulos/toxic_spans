@@ -202,12 +202,14 @@ class RNNSL:
         predictions = self.model.predict(self.to_sequences(tokenized_texts))[:,:,class_num]
         return [p.flatten() for p in predictions]
 
-    def get_toxic_offsets(self, tokenized_texts):
+    def get_toxic_offsets(self, tokenized_texts, threshold=None):
         text_predictions = self.predict(tokenized_texts)
         assert self.padding == "post"
+        if threshold is None:
+            threshold=self.threshold
         output = []
         for tokens, scores in list(zip(tokenized_texts, text_predictions)):
-          decisions = [1 if scores[i]>self.threshold else 0 for i in range(min(len(tokens),self.maxlen))]
+          decisions = [1 if scores[i]>threshold else 0 for i in range(min(len(tokens),self.maxlen))]
           output.append(decisions)
         return output
 
