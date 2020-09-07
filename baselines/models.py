@@ -250,15 +250,14 @@ class RNNSL:
             history = self.model.fit(x, y, batch_size=32, epochs=self.epochs, validation_split=0.1, verbose=1, callbacks=[early])
         return pd.DataFrame(history.history)
 
-    def tune_threshold(self, validation_data, evaluator, sensitivity=10e-3):
+    def tune_threshold(self, validation_data, evaluator):
         assert len(validation_data) == 2 and self.model is not None
-        vx = self.to_sequences(validation_data[0])
-        vy = pad_sequences(maxlen=maxlen, sequences=validation_data[1], padding=self.padding, value=0)
-        predictions = self.model.predict(vx)
-        decisions = predictions > self.threshold
-        opt_score = evaluator(decisions, vy)
-        for thr in range(0+sensitivity, 1, sensitivity):
-            decisions = predictions > thr
-            score = evaluator(decisions, vy)
+        predictions = self.predict(validation_data[0])
+        decisions = [[1 if scores[i] > self.threshold else 0 for i in range(min(len(tokens), self.maxlen))] for tokens, scores in list(zip(tokenized_texts, predictions))]
+        opt_score = np.mean([evaluator(p, g) for p,g in list(zip(decisions,validation_data[1]))])
+        for thr in range(0, 100, 1):
+            decisions = [[1 if scores[i] > thr else 0 for i in range(min(len(tokens), self.maxlen))] for
+                         tokens, scores in list(zip(tokenized_texts, predictions))]
+            score = np.mean([evaluator(p, g) for p, g in list(zip(decisions, validation_data[1]))])
             if score > opt_score:
                 self.threshold = thr
