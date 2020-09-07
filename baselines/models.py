@@ -209,7 +209,7 @@ class RNNSL:
             threshold=self.threshold
         output = []
         for tokens, scores in list(zip(tokenized_texts, text_predictions)):
-            if self.padding == "post":
+            if self.padding == "pre":
                 start = self.maxlen-len(tokens) if self.maxlen>len(tokens) else 0
                 end = self.maxlen
             else:
