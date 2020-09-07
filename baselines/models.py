@@ -172,7 +172,7 @@ class LimeUsd(InputErasure):
 
 class RNNSL:
 
-    def __init__(self, maxlen=128, w_embed_size=200, padding="post", h_embed_size=200, dropout=0.1, patience=1, plot=True, max_epochs=100):
+    def __init__(self, maxlen=128, batch_size=32, w_embed_size=200, padding="pre", h_embed_size=200, dropout=0.1, patience=1, plot=True, max_epochs=100):
         self.maxlen = maxlen
         self.w_embed_size = w_embed_size
         self.h_embed_size = h_embed_size
@@ -185,6 +185,7 @@ class RNNSL:
         self.epochs = max_epochs
         self.i2w = {}
         self.vocab = []
+        self.batch_size = batch_size
         self.show_the_model = plot
         self.threshold = 0.5
         self.unk_token = "[unk]"
@@ -233,7 +234,7 @@ class RNNSL:
         self.set_up_preprocessing(tokenized_texts)
         # turn the tokenized texts and token labels to padded sequences of indices
         x = self.to_sequences(tokenized_texts)
-        y = pad_sequences(maxlen=self.maxlen, sequences=token_labels, padding=self.padding, value=0)
+        y = pad_sequences(maxlen=self.maxlen, sequences=token_labels, padding=self.padding, truncating=self.padding, value=0)
         # build the model and compile it
         self.model = self.build()
         if self.show_the_model:
@@ -246,10 +247,10 @@ class RNNSL:
         if validation_data is not None:
             assert len(validation_data) == 2
             vx = self.to_sequences(validation_data[0])
-            vy = pad_sequences(maxlen=self.maxlen, sequences=validation_data[1], padding="post", value=0)
-            history = self.model.fit(x, y, batch_size=32, epochs=self.epochs, validation_data=(vx, vy), verbose=1, callbacks=[early])
+            vy = pad_sequences(maxlen=self.maxlen, sequences=validation_data[1], padding=self.padding, truncating=self.padding, value=0)
+            history = self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, validation_data=(vx, vy), verbose=1, callbacks=[early])
         else:
-            history = self.model.fit(x, y, batch_size=32, epochs=self.epochs, validation_split=0.1, verbose=1, callbacks=[early])
+            history = self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, validation_split=0.1, verbose=1, callbacks=[early])
         return pd.DataFrame(history.history)
 
     def tune_threshold(self, validation_data, evaluator):
@@ -258,8 +259,8 @@ class RNNSL:
         decisions = [[1 if scores[i] > self.threshold else 0 for i in range(min(len(tokens), self.maxlen))] for tokens, scores in list(zip(tokenized_texts, predictions))]
         opt_score = np.mean([evaluator(p, g) for p,g in list(zip(decisions,validation_data[1]))])
         for thr in range(0, 100, 1):
-            decisions = [[1 if scores[i] > thr else 0 for i in range(min(len(tokens), self.maxlen))] for
+            decisions = [[1 if scores[i] > thr/100. else 0 for i in range(min(len(tokens), self.maxlen))] for
                          tokens, scores in list(zip(tokenized_texts, predictions))]
             score = np.mean([evaluator(p, g) for p, g in list(zip(decisions, validation_data[1]))])
             if score > opt_score:
-                self.threshold = thr
+                self.threshold = thr/100.
