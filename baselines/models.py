@@ -261,11 +261,11 @@ class RNNSL:
     def tune_threshold(self, validation_data, evaluator):
         assert len(validation_data) == 2 and self.model is not None
         predictions = self.predict(validation_data[0])
-        decisions = [[1 if scores[i] > self.threshold else 0 for i in range(min(len(tokens), self.maxlen))] for tokens, scores in list(zip(tokenized_texts, predictions))]
+        decisions = [[1 if scores[i] > self.threshold else 0 for i in range(min(len(tokens), self.maxlen))] for tokens, scores in list(zip(validation_data[0], predictions))]
         opt_score = np.mean([evaluator(p, g) for p,g in list(zip(decisions,validation_data[1]))])
         for thr in range(0, 100, 1):
             decisions = [[1 if scores[i] > thr/100. else 0 for i in range(min(len(tokens), self.maxlen))] for
-                         tokens, scores in list(zip(tokenized_texts, predictions))]
+                         tokens, scores in list(zip(validation_data[0], predictions))]
             score = np.mean([evaluator(p, g) for p, g in list(zip(decisions, validation_data[1]))])
             if score > opt_score:
                 self.threshold = thr/100.
