@@ -172,7 +172,7 @@ class LimeUsd(InputErasure):
 
 class RNNSL:
 
-    def __init__(self, maxlen=128, batch_size=32, w_embed_size=200, padding="pre", h_embed_size=200, dropout=0.1, patience=1, plot=True, max_epochs=100):
+    def __init__(self, maxlen=128, batch_size=32, w_embed_size=200, padding="post", h_embed_size=200, dropout=0.1, patience=1, plot=True, max_epochs=100):
         self.maxlen = maxlen
         self.w_embed_size = w_embed_size
         self.h_embed_size = h_embed_size
@@ -205,13 +205,18 @@ class RNNSL:
 
     def get_toxic_offsets(self, tokenized_texts, threshold=None):
         text_predictions = self.predict(tokenized_texts)
-        assert self.padding == "post"
         if threshold is None:
             threshold=self.threshold
         output = []
         for tokens, scores in list(zip(tokenized_texts, text_predictions)):
-          decisions = [1 if scores[i]>threshold else 0 for i in range(min(len(tokens),self.maxlen))]
-          output.append(decisions)
+            if self.padding == "post":
+                start = self.maxlen-len(tokens) if self.maxlen>len(tokens) else 0
+                end = self.maxlen
+            else:
+                start = 0
+                end = min(len(tokens),self.maxlen)
+            decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)]
+            output.append(decisions)
         return output
 
     def set_up_preprocessing(self, tokenized_texts):
@@ -234,7 +239,7 @@ class RNNSL:
         self.set_up_preprocessing(tokenized_texts)
         # turn the tokenized texts and token labels to padded sequences of indices
         x = self.to_sequences(tokenized_texts)
-        y = pad_sequences(maxlen=self.maxlen, sequences=token_labels, padding=self.padding, truncating=self.padding, value=0)
+        y = pad_sequences(maxlen=self.maxlen, sequences=token_labels, padding=self.padding, value=0)
         # build the model and compile it
         self.model = self.build()
         if self.show_the_model:
@@ -247,7 +252,7 @@ class RNNSL:
         if validation_data is not None:
             assert len(validation_data) == 2
             vx = self.to_sequences(validation_data[0])
-            vy = pad_sequences(maxlen=self.maxlen, sequences=validation_data[1], padding=self.padding, truncating=self.padding, value=0)
+            vy = pad_sequences(maxlen=self.maxlen, sequences=validation_data[1], padding=self.padding, value=0)
             history = self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, validation_data=(vx, vy), verbose=1, callbacks=[early])
         else:
             history = self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, validation_split=0.1, verbose=1, callbacks=[early])
