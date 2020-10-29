@@ -18,8 +18,10 @@ def f1(predictions, gold):
         return 1. if len(predictions) == 0 else 0.
     if len(predictions) == 0:
         return 0.
-    nom = 2*len(set(predictions).intersection(set(gold)))
-    denom = len(set(predictions))+len(set(gold))
+    predictions_set = set(predictions)
+    gold_set = set(gold)
+    nom = 2 * len(predictions_set.intersection(gold_set))
+    denom = len(predictions_set) + len(gold_set)
     return float(nom)/float(denom)
 
 
