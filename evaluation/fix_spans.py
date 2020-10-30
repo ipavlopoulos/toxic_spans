@@ -29,6 +29,7 @@ def _fix_spans(spans, text):
             cleaned.extend(range(begin, end + 1))
     return cleaned
 
+
 def main():
     """Processes fixes by reading from stdin, writing to stdout."""
     reader = csv.reader(sys.stdin)
