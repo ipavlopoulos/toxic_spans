@@ -4,9 +4,10 @@
 import ast
 import csv
 import itertools
+import string
 import sys
 
-SPECIAL_CHARACTERS = [" ", "\n", "\t"]
+SPECIAL_CHARACTERS = string.whitespace
 
 def _contiguous_ranges(span_list):
     """Extracts continguous runs [1, 2, 3, 5, 6, 7] -> [(1,3), (5,7)]."""
