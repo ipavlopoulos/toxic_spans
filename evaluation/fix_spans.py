@@ -6,6 +6,7 @@ import csv
 import itertools
 import sys
 
+SPECIAL_CHARACTERS = [" ", "\n", "\t"]
 
 def _contiguous_ranges(span_list):
     """Extracts continguous runs [1, 2, 3, 5, 6, 7] -> [(1,3), (5,7)]."""
@@ -17,13 +18,13 @@ def _contiguous_ranges(span_list):
     return output
 
 
-def _fix_spans(spans, text):
+def _fix_spans(spans, text, special_characters=SPECIAL_CHARACTERS):
     """Applies minor edits to trim spans and remove singletons."""
     cleaned = []
     for begin, end in _contiguous_ranges(spans):
-        while text[begin]==' ' and begin < end:
+        while text[begin] in special_characters and begin < end:
             begin += 1
-        while text[end]==' ' and begin < end:
+        while text[end] in special_characters and begin < end:
             end -= 1
         if end - begin > 1:
             cleaned.extend(range(begin, end + 1))
