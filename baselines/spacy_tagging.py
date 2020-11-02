@@ -60,7 +60,7 @@ def main():
   print('loading training data')
   train = read_datafile('../data/tsd_train.csv')
 
-  # Read trail data for test.
+  # Read trial data for test.
   print('loading test data')
   test = read_datafile('../data/tsd_trial.csv')
 

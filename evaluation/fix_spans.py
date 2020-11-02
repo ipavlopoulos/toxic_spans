@@ -19,7 +19,7 @@ def _contiguous_ranges(span_list):
     return output
 
 
-def _fix_spans(spans, text, special_characters=SPECIAL_CHARACTERS):
+def fix_spans(spans, text, special_characters=SPECIAL_CHARACTERS):
     """Applies minor edits to trim spans and remove singletons."""
     cleaned = []
     for begin, end in _contiguous_ranges(spans):
