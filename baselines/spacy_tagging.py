@@ -18,7 +18,7 @@ import sys
 import sklearn
 import spacy
 
-sys.path.append('../evaluations')
+sys.path.append('../evaluation')
 import semeval2021
 import fix_spans
 
