@@ -48,9 +48,9 @@ def read_datafile(filename):
     reader = csv.DictReader(csvfile)
     count = 0
     for row in reader:
-      fixed = fix_spans.fix_spans(
-          ast.literal_eval(row['spans']), row['text'])
-      data.append((fixed, row['text']))
+      text = row['text']
+      spans = ast.literal_eval(row['spans'])
+      data.append((spans, text))
   return data
 
 
@@ -71,7 +71,7 @@ def main():
   training_data = []
   for n, (spans, text) in enumerate(train):
     doc = nlp(text)
-    ents = spans_to_ents(doc, set(spans), 'TOXIC')
+    ents = spans_to_ents(doc, set(fix_spans.fix_spans(spans, text)), 'TOXIC')
     training_data.append((doc.text, {'entities': ents}))
 
   toxic_tagging = spacy.blank('en')
@@ -102,14 +102,17 @@ def main():
   # Score on trial data.
   print('evaluation')
   scores = []
+  fixed_scores = []
   for spans, text in test:
     pred_spans = []
     doc = toxic_tagging(text)
     for ent in doc.ents:
       pred_spans.extend(range(ent.start_char, ent.start_char + len(ent.text)))
-    score = semeval2021.f1(pred_spans, spans)
-    scores.append(score)
-  print('avg F1 %g' % statistics.mean(scores))
+    scores.append(semeval2021.f1(pred_spans, spans))
+    fixed_scores.append(semeval2021.f1(
+        pred_spans, fix_spans.fix_spans(spans, text)))
+  print('avg F1 %g %g' % (
+      statistics.mean(scores), statistics.mean(fixed_scores)))
 
 
 if __name__ == '__main__':
