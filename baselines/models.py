@@ -276,4 +276,5 @@ class RNNSL:
                          tokens, scores in list(zip(validation_data[0], predictions))]
             score = np.mean([evaluator(p, g) for p, g in list(zip(decisions, validation_data[1]))])
             if score > opt_score:
+                opt_score = score
                 self.threshold = thr/100.
