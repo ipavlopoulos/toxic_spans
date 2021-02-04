@@ -6,4 +6,4 @@ See more about this task [here](https://sites.google.com/view/toxicspans) or dir
 
 * In this repository you will find a notebook with code to prepare a valid submission.
 * Evaluation code and baseline methods are included.
-* The trial and train data that were used in the 2021 SemEval challenge are also included.
+* The trial, train and test data that were used in the 2021 SemEval challenge are also included.
