@@ -1,0 +1,25 @@
+  
+<div class="entity_extract_body">
+  <div class="noselect">
+    <cml:checkbox label="Click here if the comment below is not toxic." name="notags"></cml:checkbox>
+    <cml:checkbox label="Click here if no specific span is responsible for the text's toxicity." name="alltox"></cml:checkbox>
+  </div>
+  <cml:group only-if="notags:unchecked||alltox:unchecked" name="">
+    <div class="entity_extract">
+      <div class="passage full_text well well2 notranslate" style="text-align: left;">{{comment_text}}</div>
+      <div class="history"></div>
+      <div class="entity_types unique notranslate">
+        <button class="btn" style="color:lightcoral;" data-training="Insult">Insult</button>
+        <button class="btn" style="color:mediumseagreen;" data-training="Threat">Threat</button>
+        <button class="btn" style="color:cornflowerblue;" data-training="Identity">Identity based Attack</button>
+        <button class="btn" style="color:orange;" data-training="Profanity">Profane/Obscene</button>
+        <button class="btn" style="color:blue;" data-training="Profanity">Other Toxicity</button>
+      </div>
+      <div class="row-fluid main">
+        <div class="noselect well">
+          <cml:text label="Toxic Spans" name="spans" multiple="true" validates="required" strict="true" aggregation="cagg_0.30" disabled="true"></cml:text>
+        </div>
+      </div>
+    </div>
+  </cml:group>
+</div>
