@@ -10,7 +10,7 @@ from keras.preprocessing.sequence import pad_sequences
 from keras.models import Model, Input
 from keras.layers import GRU, LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional
 from keras.callbacks import EarlyStopping
-from keras.utils import plot_model
+#from keras.utils import plot_model
 from keras.metrics import BinaryAccuracy, Precision, Recall, AUC
 
 
@@ -252,7 +252,7 @@ class RNNSL:
         self.model = self.build()
         if self.show_the_model:
             print(self.model.summary())
-            plot_model(self.model, show_shapes=True, to_file="neural_sequence_labeler.model.png")
+            #plot_model(self.model, show_shapes=True, to_file="neural_sequence_labeler.model.png")
         self.model.compile(optimizer="adam", loss="binary_crossentropy", metrics=self.METRICS)
         #mode = "max" if monitor == "val_accuracy" else "min"
         early = EarlyStopping(monitor=monitor, mode="min" if "loss" in monitor else "max", patience=self.patience, verbose=1, min_delta=0.0001, restore_best_weights=True)
