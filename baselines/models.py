@@ -13,7 +13,12 @@ from tensorflow.keras.layers import GRU, LSTM, Embedding, Dense, TimeDistributed
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.utils import plot_model
 from tensorflow.keras.metrics import BinaryAccuracy, Precision, Recall, AUC
-
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
 
 def write_offsets(offsets, filename="answer.txt"):
     """
@@ -279,3 +284,35 @@ class RNNSL:
             if score > opt_score:
                 opt_score = score
                 self.threshold = thr/100.
+
+
+class MLTC:
+
+    def __init__(self,
+                 tokenise=lambda x: x.split(),
+                 model=LogisticRegression(),
+                 binary=True,
+                 max_features=10000,
+                 use_idf=False,
+                 lowercase=True):
+        self.tokenise = tokenise
+        self.use_idf = use_idf
+        self.vectorizer = CountVectorizer(analyzer='word',
+                                          stop_words="english",
+                                          tokenizer=tokenise,
+                                          lowercase=lowercase,
+                                          binary=binary,
+                                          max_features=max_features)
+        # self.tfidf_vectorizer = TfidfTransformer(use_idf=self.use_idf)
+        self.model = model
+
+    def fit(self, X_train, y_train, X_dev=None, y_dev=None):
+        train_vectors = self.vectorizer.fit_transform(X_train)
+        # self.tfidf_vectorizer.fit(train_vectors)
+        # train_vectors = self.tfidf_vectorizer.transform(train_vectors)
+        self.model.fit(train_vectors, y_train)
+
+    def predict(self, x):
+        test_vectors = self.vectorizer.transform(x)
+        # test_vectors = self.tfidf_vectorizer.transform(counts)
+        return self.model.predict_proba(test_vectors)[:, 1]
