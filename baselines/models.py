@@ -6,12 +6,13 @@ import numpy as np
 np.random.seed(seed=2021)
 from lime import lime_text
 from lime.lime_text import LimeTextExplainer
-from keras.preprocessing.sequence import pad_sequences
-from keras.models import Model, Input
-from keras.layers import GRU, LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional
-from keras.callbacks import EarlyStopping
-from keras.utils import plot_model
-from keras.metrics import BinaryAccuracy, Precision, Recall, AUC
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input
+from tensorflow.keras.layers import GRU, LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.utils import plot_model
+from tensorflow.keras.metrics import BinaryAccuracy, Precision, Recall, AUC
 
 
 def write_offsets(offsets, filename="answer.txt"):
