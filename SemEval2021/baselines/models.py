@@ -286,6 +286,64 @@ class RNNSL:
                 self.threshold = thr/100.
 
 
+####### Text Classifiers ##############
+
+class RNNTC():
+    def __init__(self,
+                 verbose=1,
+                 batch_size=128,
+                 n_epochs=100,
+                 max_length=128,
+                 word_dimension=200,
+                 hidden_dimension=200,
+                 loss="mse",
+                 prefix=""):
+        self.verbose = verbose
+        self.batch_size = batch_size
+        self.hidden_dimension = hidden_dimension
+        self.word_dimension = word_dimension
+        self.n_epochs = n_epochs
+        self.max_length = max_length
+        self.tokenizer = Tokenizer()
+        self.loss = loss
+        self.name = f'b{batch_size}.e{n_epochs}.len{max_length}.{prefix}rnn'
+
+    def build(self, vocab_size, show=False):
+        inputs1 = Input(shape=(self.max_length,))
+        emb1 = Embedding(vocab_size, self.word_dimension)(inputs1)
+        rnn = LSTM(self.hidden_dimension, return_sequences=False)(emb1)
+        fnn = Dense(1, activation='sigmoid')(rnn)
+        self.model = Model(inputs=inputs1, outputs=fnn)
+        self.model.compile(loss=self.loss,
+                           optimizer=keras.optimizers.Adam(),
+                           metrics=['accuracy'])
+        if show:
+            print(self.model.summary())
+            plot_model(self.model, show_shapes=True, to_file='plot.png')
+
+    def text_process(self, texts, tokenizer):
+        x1 = tokenizer.texts_to_sequences(np.array(texts))
+        x1 = sequence.pad_sequences(x1, maxlen=self.max_length)  # padding
+        return x1
+
+    def fit(self, X, y, X_val, y_val, monitor='val_loss', patience=1):
+        self.tokenizer.fit_on_texts(X)
+        self.vocab_size = len(self.tokenizer.word_index) + 1
+        print('Vocabulary Size: %d' % self.vocab_size)
+        self.build(self.vocab_size)
+        early = EarlyStopping(monitor=monitor, patience=patience, verbose=self.verbose, min_delta=0.0001,
+                              restore_best_weights=True)
+        self.model.fit(self.text_process(X, self.tokenizer), y,
+                       validation_data=(self.text_process(X_val, self.tokenizer), y_val),
+                       epochs=self.n_epochs,
+                       batch_size=self.batch_size,
+                       verbose=self.verbose,
+                       callbacks=[early])
+
+    def predict(self, test_texts):
+        predictions = self.model.predict(self.text_process(test_texts, self.tokenizer))
+        return predictions
+
 class MLTC:
 
     def __init__(self,
