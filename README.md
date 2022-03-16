@@ -1,10 +1,21 @@
-# Toxic Spans Detection (SemEval 2021 Task 5)
+# Toxic Spans
 
-The Toxic Spans Detection task concerns the evaluation of systems that detect the spans that make a text toxic, when detecting such spans is possible. Moderation is crucial to promoting healthy online discussions. Although several toxicity (a.k.a. abusive language) detection datasets (Wulczyn et al., 2017; Borkan et al., 2019) and models (Schmidt and Wiegand, 2017; Pavlopoulos et al., 2017b; Zampieri et al., 2019) have been released, most of them classify whole comments or documents, and do not identify the spans that make a text toxic. But highlighting such toxic spans can assist human moderators (e.g., news portals moderators) who often deal with lengthy comments, and who prefer attribution instead of just a system-generated unexplained toxicity score per post. The evaluation of systems that could accurately locate toxic spans within a text is thus a crucial step towards successful semi-automated moderation.
+The task of Toxic Span detection was introduced as a SemEval task in 2021 (Task 5). 
+The first version of this dataset exists in the folder SemEval2021 of this repository.
+An extended version of this dataset, along with more baselines and experimental results, was presented at ACL 2022. The second and final version of the dataset exists in the folder ACL2022 of this repository.
 
-We received 479 individual participation requests, 92 team formations, and 1,449 submissions. 91 teams submitted valid predictions (1,385 valid submissions in total) and were scored; out of these, only 36 submitted system descriptions. The best performing system achieved 70.83% F1. Please read our [task overview paper](https://aclanthology.org/2021.semeval-1.6.pdf) for more information about the task, data, evaluation, and performance of the participating systems. If you want to cite this work, please use the following information:
-
+We refer the interested reader to the following articles, which we also kindly request to cite if you use the data or findings of this work:
 ```
+@inproceedings{pavlopoulos-etal-2022-acl,
+    title = "From the Detection of Toxic Spans in Online Discussions to the Analysis of Toxic-to-Civil Transfer",
+    author = "Pavlopoulos, John  and Laugier, L{\'e}o and Xenos, Alexandros and Sorensen, Jeffrey and Androutsopoulos, Ion",
+    booktitle = "Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL 2022).",
+    month = may,
+    year = "2022",
+    address = "Dublin, Ireland",
+    publisher = "Association for Computational Linguistics",
+}
+
 @inproceedings{pavlopoulos-etal-2021-semeval,
     title = "{S}em{E}val-2021 Task 5: Toxic Spans Detection",
     author = "Pavlopoulos, John  and Sorensen, Jeffrey  and Laugier, L{\'e}o and Androutsopoulos, Ion",
@@ -18,6 +29,3 @@ We received 479 individual participation requests, 92 team formations, and 1,449
     pages = "59--69",
 }
 ```
-* In this repository you will find a notebook with code to prepare a valid submission.
-* Evaluation code and baseline methods are included.
-* The trial, train and test data that were used in the 2021 SemEval challenge are also included.
