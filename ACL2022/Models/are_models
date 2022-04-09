@@ -1,0 +1,324 @@
+import pandas as pd
+import numpy as np
+from tqdm import tqdm
+from sklearn import metrics
+from scipy.stats import sem
+from ast import literal_eval
+import tensorflow 
+from tensorflow.keras.preprocessing.text import Tokenizer
+import tensorflow_text as tf_text
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, LSTM, Embedding, Dense, TimeDistributed, Dropout, Bidirectional
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.layers import LayerNormalization
+from sklearn.metrics import *
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.metrics import BinaryAccuracy, Precision, Recall, AUC
+from tensorflow.keras.metrics import MeanSquaredError, MeanAbsoluteError, MeanSquaredLogarithmicError 
+import os
+from transformers import BertTokenizer, TFBertModel, BertConfig, PreTrainedTokenizerFast
+from transformers import BertTokenizerFast,  BatchEncoding
+from tokenizers import Encoding
+
+class BILSTM_ARE():
+  def __init__(self,
+               rnn_layer_size = 128,
+               attention_hidden_layers = 2,
+               show_summary=True,
+               patience=3,
+               epochs=200,
+               batch_size=128,
+               lr=0.001,
+               loss='MSE',
+               max_seq_len = 128,
+               embedding_size = 200,
+               monitor_loss = 'val_loss',
+               metrics = [MeanSquaredError(name="MSE"),
+                          MeanAbsoluteError(name="MAE"),
+                          MeanSquaredLogarithmicError(name="MSLE"),
+                          ]  
+              ):
+        self.lr = lr
+        self.batch_size = batch_size
+        self.rnn_layer_size = rnn_layer_size
+        self.attention_hidden_layers = 2
+        self.max_seq_len =  max_seq_len
+        self.show_summary = show_summary
+        self.patience=patience
+        self.epochs = epochs
+        self.loss = loss
+        self.embedding_size = embedding_size
+        self.monitor_loss = monitor_loss
+        self.metrics = metrics
+        self.earlystop = tf.keras.callbacks.EarlyStopping(monitor=self.monitor_loss,
+                                                          patience=self.patience,
+                                                          verbose=1,
+                                                          restore_best_weights=True,
+                                                          mode="min"
+                                                         )
+        self.unk_token = "[unk]"
+        self.pad_token = "[pad]"
+
+  #dummy loss for att weights (ignores them)
+  def dummy_loss(self, y_true, y_pred):
+      return 0.0
+
+  def build(self, vocab_size):
+      inputs= Input(shape=(self.max_seq_len,), name="inputs")
+      x = Embedding(input_dim=vocab_size, output_dim=self.embedding_size, 
+                      input_length=self.max_seq_len, mask_zero=True, trainable=True)(inputs)
+      rnn = Bidirectional(LSTM(self.rnn_layer_size, return_sequences=True))(x)
+      for i in range(self.attention_hidden_layers): #-1):
+        if i == 0:
+          x = TimeDistributed(Dense(self.rnn_layer_size, activation = None))(rnn)
+        elif i == self.attention_hidden_layers-1: #last layer
+          x = TimeDistributed(Dense(1, activation = None))(x)
+        else:
+          x = TimeDistributed(Dense(self.rnn_layer_size, activation = None))(x) #hidden layer
+      att_weights = tensorflow.nn.softmax(x, axis=1)
+      weighted_represantation = tensorflow.math.multiply(att_weights, rnn, name=None)
+      weighted_represantation = tensorflow.reduce_sum(weighted_represantation, axis = 1)
+      pred = Dense(1, activation = None, name = 'classification')(weighted_represantation)
+      self.model = Model(inputs=inputs, outputs=[pred, tensorflow.squeeze(att_weights)])
+      self.model.compile(loss=[self.loss, self.dummy_loss] ,
+                    optimizer=tensorflow.keras.optimizers.Adam(learning_rate=self.lr),
+                    metrics=self.metrics)
+      if self.show_summary:
+          self.model.summary()
+
+  def create_vocab(self, tokenized_texts):
+    self.vocab = list(set([w for txt in tokenized_texts for w in txt]))
+    self.vocab_size = len(self.vocab) + 2
+    print("Vocab size: ", self.vocab_size)
+    self.w2i = {w: i+2 for i,w in enumerate(self.vocab)}
+    self.w2i[self.unk_token] = 1
+    self.w2i[self.pad_token] = 0
+    self.i2w = {i+2: self.w2i[w] for i,w in enumerate(self.vocab)}
+    self.i2w[1] = self.unk_token
+    self.i2w[0] = self.pad_token
+  
+  def to_sequences(self, tokenized_texts):
+        x = [[self.w2i[w] if w in self.w2i else self.w2i[self.unk_token] for w in t] for t in tokenized_texts]
+        x = pad_sequences(sequences=x, maxlen=self.max_seq_len, padding="post", value=0)  # padding
+        return x
+  
+  #Dummy labels are to ignore attentions
+  def fit(self, tokenized_texts, y, dummy_y, val_texts, val_y, val_dummy_y):
+    # Create vocab and lookup tables
+    self.create_vocab(tokenized_texts)
+    # turn the tokenized texts and token labels to padded sequences of indices
+    X = self.to_sequences(tokenized_texts)
+    dummy_y = pad_sequences(maxlen=self.max_seq_len, sequences=dummy_y, padding="post", value=0.0, dtype='float32')
+    # build the model and compile it
+    self.build(self.vocab_size)
+    # start training
+    vx = self.to_sequences(val_texts)
+    val_dummy_y = pad_sequences(maxlen=self.max_seq_len, sequences=val_dummy_y, padding="post", value=0.0, dtype='float32')
+    history = self.model.fit(X, [y, dummy_y], batch_size=self.batch_size,
+                             epochs=self.epochs, validation_data=(vx,[val_y, val_dummy_y])
+                              , verbose=1, callbacks=[self.earlystop])
+    return history
+  
+  def predict(self, tokenized_texts):
+        predictions, atts = self.model.predict(self.to_sequences(tokenized_texts))
+        return predictions, atts
+
+  def finetune_att_threshold(self, dev_tokenized_texts, dev_token_offsets, dev_position):
+    f1s = []
+    for th in range(0,100):
+      th = th/100
+      pred_offsets = self.get_toxic_offsets(dev_tokenized_texts, threshold=th)
+      pred_char_offsets = self.get_toxic_char_offsets(dev_token_offsets, pred_offsets)
+      f1 = np.mean([semeval2021.f1(p,g) for p,g in list(zip(pred_char_offsets, dev_position))])
+      f1s.append(f1)
+    best_th = np.argmax(f1s)/100
+    print("Optimal threshold is: ",best_th, " with F1 score = ",max(f1s))
+    return best_th
+
+  def get_toxic_offsets(self, tokenized_texts, threshold=0.5):
+    text_predictions, atts = self.predict(tokenized_texts)
+    output = []
+    for tokens, scores in list(zip(tokenized_texts, atts)):
+      start = 0
+      end = min(len(tokens),self.max_seq_len)
+      decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)]
+      output.append(decisions)
+    return output
+
+  def get_toxic_char_offsets(self, token_offsets, toxic_offsets):
+    toxic_char_offsets = []
+    for i,instance in enumerate(toxic_offsets):
+      instance_toxic_char_offsets = []
+      for j,token_label in enumerate(instance):
+        if token_label == 1:
+          instance_toxic_char_offsets.extend([ch for ch in token_offsets[i][j]])
+      toxic_char_offsets.append(instance_toxic_char_offsets)
+    return toxic_char_offsets
+
+
+class BERT_ARE():
+
+  def __init__(self,
+                 bert_config = BertConfig(),
+                 trainable_layers=3,
+                 max_seq_length=128,
+                 show_summary=True,
+                 patience=3,
+                 epochs=100,
+                 batch_size=32,
+                 lr=2e-05,
+                 session=None,
+                 dense_activation = 'sigmoid',
+                 loss='binary_crossentropy',
+                 monitor_loss = 'val_loss',
+                 monitor_mode = 'min',
+                 METRICS = [BinaryAccuracy(name='accuracy'),
+                        Precision(name='precision'),
+                        Recall(name='recall')
+                        ]     
+                 ):
+        self.bert_config = bert_config
+        self.session = session
+        self.tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased", do_lower_case=False,  max_length=max_seq_length,pad_to_max_length=True)
+        self.lr = lr
+        self.batch_size = batch_size
+        self.trainable_layers = trainable_layers
+        self.max_seq_length = max_seq_length
+        self.show_summary = show_summary
+        self.patience=patience
+        self.epochs = epochs
+        self.METRICS = METRICS
+        self.loss = loss
+        self.monitor_loss = monitor_loss
+        self.monitor_mode = monitor_mode
+        self.dense_activation = dense_activation
+        self.earlystop = tensorflow.keras.callbacks.EarlyStopping(monitor=self.monitor_loss,
+                                                            patience=self.patience,
+                                                            verbose=1,
+                                                            restore_best_weights=True,
+                                                            mode=self.monitor_mode)
+        self.BERT = TFBertModel.from_pretrained("bert-base-cased", output_attentions = True) #, config=self.bert_config)
+
+
+  #prepare inputs for bert 
+  def to_bert_input(self, texts):
+    input_ids, input_masks, input_segments = [],[],[]
+    for text in tqdm(texts):
+      inputs = self.tokenizer.encode_plus(text, add_special_tokens=True, max_length=self.max_seq_length, pad_to_max_length=True, 
+                                                  return_attention_mask=True, return_token_type_ids=True)
+      input_ids.append(inputs['input_ids'])
+      input_masks.append(inputs['attention_mask'])
+      input_segments.append(inputs['token_type_ids'])
+    return (np.asarray(input_ids, dtype='int32'), np.asarray(input_masks, dtype='int32'), np.asarray(input_segments, dtype='int32'))
+
+
+
+  def build(self, bias=0):
+        in_id = Input(shape=(self.max_seq_length,), name="input_ids", dtype='int32')
+        in_mask = Input(shape=(self.max_seq_length,), name="input_masks", dtype='int32')
+        in_segment = Input(shape=(self.max_seq_length,), name="segment_ids", dtype='int32')
+        bert_inputs = [in_id, in_mask, in_segment]
+
+        bert_output = self.BERT(bert_inputs).last_hidden_state
+        bert_output = bert_output[:,0,:] #take only the ['CLS'] token
+        pred = Dense(1, activation = self.dense_activation, name = 'classification')(bert_output)
+        self.model = tensorflow.keras.models.Model(inputs=bert_inputs, outputs=pred)
+        self.model.compile(loss=self.loss,
+                      optimizer=tensorflow.keras.optimizers.Adam(learning_rate=self.lr),
+                      metrics=self.METRICS)
+        if self.show_summary:
+            self.model.summary()
+  
+  
+  def fit(self, train_X, train_y, dev_X, dev_y, bert_weights=None, class_weights={0: 1, 1: 1}, pretrained_embeddings=None):
+        train_input = self.to_bert_input(train_X)
+        dev_input = self.to_bert_input(dev_X)
+        self.build()
+        if bert_weights is not None:
+            self.model.load_weights(bert_weights)
+        history = self.model.fit(train_input,
+                       train_y,
+                       validation_data=(dev_input, dev_y),
+                       epochs=self.epochs,
+                       callbacks=[self.earlystop],
+                       batch_size=self.batch_size,
+                       class_weight=None 
+                       )
+        return history
+
+  def predict(self, texts):
+        test_input = self.to_bert_input(texts)
+        predictions = self.model.predict(test_input)        
+        print('Stopped epoch: ', self.earlystop.stopped_epoch)
+        return predictions
+  
+  
+   #take the average (of all heads) of the last layer for the ['CLS'] to  
+  def get_attentions(self, test_texts, layer = 12, batch_size = 100):
+    atts = []
+    counter = 0 
+    for i in range(0, len(test_texts)//batch_size):
+      texts = test_texts[i*batch_size: (i+1)*batch_size]
+      input = self.to_bert_input(texts)
+      bert_atts = tensorflow.math.reduce_mean(self.BERT(input).attentions[layer-1][:,:], axis=1)[:,0,:]
+      atts.append(bert_atts)
+      counter = i
+    counter +=1
+    if  len(test_texts)%batch_size != 0:
+      texts = test_texts[counter*100:]
+      input = self.to_bert_input(texts)
+      bert_atts = tensorflow.math.reduce_mean(self.BERT(input).attentions[layer-1][:,:], axis=1)[:,0,:]
+      atts.append(bert_atts)
+    atts = [item for sublist in atts for item in sublist] #flatten
+    return atts
+
+  
+  def finetune_att_threshold(self, dev_texts, dev_position):
+    f1s = [] #save f1s for all possible thresholds
+    for th in range(0,100):
+      th = th/100
+      pred_offsets = self.get_toxic_offsets(dev_texts, threshold=th)
+      pred_char_offsets = self.get_toxic_char_offsets(dev_texts, pred_offsets)
+      f1 = np.mean([semeval2021.f1(p,g) for p,g in list(zip(pred_char_offsets, dev_position))])
+      f1s.append(f1)
+    best_th = np.argmax(f1s)/100
+    print("Optimal threshold is: ",best_th, " with F1 score = ",max(f1s))
+    return best_th
+  
+  def get_toxic_offsets(self, texts, threshold=0.5):
+    att_weights = self.get_attentions(texts, layer = 12, batch_size = 100)
+    output = []
+    tokenized_texts = [['CLS'] + self.tokenizer.tokenize(text) + ['SEP'] for text in texts]
+    for i, scores in enumerate(att_weights):
+      start = 0  
+      end = min(len(tokenized_texts[i]),self.max_seq_length) 
+      decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)]
+      output.append(decisions)
+    return output
+
+
+  def get_toxic_char_offsets(self, texts, toxic_offsets):
+    toxic_char_offsets = []
+    for i,text in enumerate(texts):
+      instance_toxic_char_offsets = []
+      tokenized_batch : BatchEncoding = self.tokenizer(text)
+      tokenized_text :Encoding = tokenized_batch[0]
+      for j,token_label in enumerate(toxic_offsets[i]):
+        if j == 0 or j == len(toxic_offsets[i])-1:
+          continue
+        if token_label == 1:
+          index_of_word = tokenized_text.token_to_word(j)
+          (start, end) = tokenized_text.word_to_chars(index_of_word)
+          instance_toxic_char_offsets.extend([ch for ch in range(start,end)])
+      toxic_char_offsets.append(set(instance_toxic_char_offsets)) 
+    return toxic_char_offsets
+
+  def save_weights(self, path):
+    self.model.save_weights(path)
+
+  def load_weights(self, path):
+    self.model.load_weights(path)
+        
+    
+ 
