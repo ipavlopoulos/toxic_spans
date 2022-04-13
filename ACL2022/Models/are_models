@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 from tqdm import tqdm
 from sklearn import metrics
 from scipy.stats import sem
@@ -16,7 +17,6 @@ from sklearn.metrics import *
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.metrics import BinaryAccuracy, Precision, Recall, AUC
 from tensorflow.keras.metrics import MeanSquaredError, MeanAbsoluteError, MeanSquaredLogarithmicError 
-import os
 from transformers import BertTokenizer, TFBertModel, BertConfig, PreTrainedTokenizerFast
 from transformers import BertTokenizerFast,  BatchEncoding
 from tokenizers import Encoding
@@ -34,9 +34,9 @@ class BILSTM_ARE():
                max_seq_len = 128,
                embedding_size = 200,
                monitor_loss = 'val_loss',
-               metrics = [MeanSquaredError(name="MSE"),
-                          MeanAbsoluteError(name="MAE"),
-                          MeanSquaredLogarithmicError(name="MSLE"),
+               metrics = [MeanSquaredError(name='MSE'),
+                          MeanAbsoluteError(name='MAE'),
+                          MeanSquaredLogarithmicError(name='MSLE'),
                           ]  
               ):
         self.lr = lr
@@ -55,17 +55,17 @@ class BILSTM_ARE():
                                                           patience=self.patience,
                                                           verbose=1,
                                                           restore_best_weights=True,
-                                                          mode="min"
+                                                          mode='min'
                                                          )
-        self.unk_token = "[unk]"
-        self.pad_token = "[pad]"
+        self.unk_token = '[unk]'
+        self.pad_token = '[pad]'
 
   #dummy loss for att weights (ignores them)
   def dummy_loss(self, y_true, y_pred):
       return 0.0
 
   def build(self, vocab_size):
-      inputs= Input(shape=(self.max_seq_len,), name="inputs")
+      inputs= Input(shape=(self.max_seq_len,), name='inputs')
       x = Embedding(input_dim=vocab_size, output_dim=self.embedding_size, 
                       input_length=self.max_seq_len, mask_zero=True, trainable=True)(inputs)
       rnn = Bidirectional(LSTM(self.rnn_layer_size, return_sequences=True))(x)
@@ -88,9 +88,9 @@ class BILSTM_ARE():
           self.model.summary()
 
   def create_vocab(self, tokenized_texts):
-    self.vocab = list(set([w for txt in tokenized_texts for w in txt]))
+    self.vocab = {w for txt in tokenized_texts for w in txt}
     self.vocab_size = len(self.vocab) + 2
-    print("Vocab size: ", self.vocab_size)
+    print('Vocab size: ', self.vocab_size)
     self.w2i = {w: i+2 for i,w in enumerate(self.vocab)}
     self.w2i[self.unk_token] = 1
     self.w2i[self.pad_token] = 0
@@ -99,8 +99,10 @@ class BILSTM_ARE():
     self.i2w[0] = self.pad_token
   
   def to_sequences(self, tokenized_texts):
+        #For each word of each text in tokenized texts, check if this word exists in the vocab
+        #If it exits then take its index, otherwise take the index of the unknown token
         x = [[self.w2i[w] if w in self.w2i else self.w2i[self.unk_token] for w in t] for t in tokenized_texts]
-        x = pad_sequences(sequences=x, maxlen=self.max_seq_len, padding="post", value=0)  # padding
+        x = pad_sequences(sequences=x, maxlen=self.max_seq_len, padding='post', value=0)  # padding
         return x
   
   #Dummy labels are to ignore attentions
@@ -109,12 +111,12 @@ class BILSTM_ARE():
     self.create_vocab(tokenized_texts)
     # turn the tokenized texts and token labels to padded sequences of indices
     X = self.to_sequences(tokenized_texts)
-    dummy_y = pad_sequences(maxlen=self.max_seq_len, sequences=dummy_y, padding="post", value=0.0, dtype='float32')
+    dummy_y = pad_sequences(maxlen=self.max_seq_len, sequences=dummy_y, padding='post', value=0.0, dtype='float32')
     # build the model and compile it
     self.build(self.vocab_size)
     # start training
     vx = self.to_sequences(val_texts)
-    val_dummy_y = pad_sequences(maxlen=self.max_seq_len, sequences=val_dummy_y, padding="post", value=0.0, dtype='float32')
+    val_dummy_y = pad_sequences(maxlen=self.max_seq_len, sequences=val_dummy_y, padding='post', value=0.0, dtype='float32')
     history = self.model.fit(X, [y, dummy_y], batch_size=self.batch_size,
                              epochs=self.epochs, validation_data=(vx,[val_y, val_dummy_y])
                               , verbose=1, callbacks=[self.earlystop])
@@ -133,7 +135,7 @@ class BILSTM_ARE():
       f1 = np.mean([semeval2021.f1(p,g) for p,g in list(zip(pred_char_offsets, dev_position))])
       f1s.append(f1)
     best_th = np.argmax(f1s)/100
-    print("Optimal threshold is: ",best_th, " with F1 score = ",max(f1s))
+    print('Optimal threshold is: ',best_th, ' with F1 score = ',max(f1s))
     return best_th
 
   def get_toxic_offsets(self, tokenized_texts, threshold=0.5):
@@ -155,12 +157,12 @@ class BILSTM_ARE():
           instance_toxic_char_offsets.extend([ch for ch in token_offsets[i][j]])
       toxic_char_offsets.append(instance_toxic_char_offsets)
     return toxic_char_offsets
-
+    
+    
 
 class BERT_ARE():
 
   def __init__(self,
-                 bert_config = BertConfig(),
                  trainable_layers=3,
                  max_seq_length=128,
                  show_summary=True,
@@ -178,9 +180,8 @@ class BERT_ARE():
                         Recall(name='recall')
                         ]     
                  ):
-        self.bert_config = bert_config
         self.session = session
-        self.tokenizer = BertTokenizerFast.from_pretrained("bert-base-cased", do_lower_case=False,  max_length=max_seq_length,pad_to_max_length=True)
+        self.tokenizer = BertTokenizerFast.from_pretrained('bert-base-cased', do_lower_case=False,  max_length=max_seq_length,pad_to_max_length=True)
         self.lr = lr
         self.batch_size = batch_size
         self.trainable_layers = trainable_layers
@@ -198,7 +199,7 @@ class BERT_ARE():
                                                             verbose=1,
                                                             restore_best_weights=True,
                                                             mode=self.monitor_mode)
-        self.BERT = TFBertModel.from_pretrained("bert-base-cased", output_attentions = True) #, config=self.bert_config)
+        self.BERT = TFBertModel.from_pretrained('bert-base-cased', output_attentions = True) #, config=self.bert_config)
 
 
   #prepare inputs for bert 
@@ -215,11 +216,10 @@ class BERT_ARE():
 
 
   def build(self, bias=0):
-        in_id = Input(shape=(self.max_seq_length,), name="input_ids", dtype='int32')
-        in_mask = Input(shape=(self.max_seq_length,), name="input_masks", dtype='int32')
-        in_segment = Input(shape=(self.max_seq_length,), name="segment_ids", dtype='int32')
+        in_id = Input(shape=(self.max_seq_length,), name='input_ids', dtype='int32')
+        in_mask = Input(shape=(self.max_seq_length,), name='input_masks', dtype='int32')
+        in_segment = Input(shape=(self.max_seq_length,), name='segment_ids', dtype='int32')
         bert_inputs = [in_id, in_mask, in_segment]
-
         bert_output = self.BERT(bert_inputs).last_hidden_state
         bert_output = bert_output[:,0,:] #take only the ['CLS'] token
         pred = Dense(1, activation = self.dense_activation, name = 'classification')(bert_output)
@@ -253,23 +253,27 @@ class BERT_ARE():
         print('Stopped epoch: ', self.earlystop.stopped_epoch)
         return predictions
   
+  def compute_atts(self, texts, layer = 12):
+    input = self.to_bert_input(texts)
+    bert_atts = tensorflow.math.reduce_mean(self.BERT(input).attentions[layer-1][:,:], axis=1)[:,0,:]
+    return bert_atts
   
-   #take the average (of all heads) of the last layer for the ['CLS'] to  
+  #take the average (of all heads) of the last layer for the ['CLS'] token  
   def get_attentions(self, test_texts, layer = 12, batch_size = 100):
     atts = []
     counter = 0 
-    for i in range(0, len(test_texts)//batch_size):
-      texts = test_texts[i*batch_size: (i+1)*batch_size]
-      input = self.to_bert_input(texts)
-      bert_atts = tensorflow.math.reduce_mean(self.BERT(input).attentions[layer-1][:,:], axis=1)[:,0,:]
-      atts.append(bert_atts)
-      counter = i
-    counter +=1
-    if  len(test_texts)%batch_size != 0:
-      texts = test_texts[counter*100:]
-      input = self.to_bert_input(texts)
-      bert_atts = tensorflow.math.reduce_mean(self.BERT(input).attentions[layer-1][:,:], axis=1)[:,0,:]
-      atts.append(bert_atts)
+    if len(test_texts) < batch_size:
+      texts = test_texts
+      atts.append(self.compute_atts(texts, layer = 12))
+    else:
+      for i in range(0, len(test_texts)//batch_size):
+        texts = test_texts[i*batch_size: (i+1)*batch_size]
+        atts.append(self.compute_atts(texts, layer = 12))
+        counter = i
+      counter +=1
+      if  len(test_texts)%batch_size != 0:
+        texts = test_texts[counter*batch_size:]
+        atts.append(self.compute_atts(texts, layer = 12))
     atts = [item for sublist in atts for item in sublist] #flatten
     return atts
 
@@ -289,7 +293,7 @@ class BERT_ARE():
   def get_toxic_offsets(self, texts, threshold=0.5):
     att_weights = self.get_attentions(texts, layer = 12, batch_size = 100)
     output = []
-    tokenized_texts = [['CLS'] + self.tokenizer.tokenize(text) + ['SEP'] for text in texts]
+    tokenized_texts = [['[CLS]'] + self.tokenizer.tokenize(text) + ['[SEP]'] for text in texts]
     for i, scores in enumerate(att_weights):
       start = 0  
       end = min(len(tokenized_texts[i]),self.max_seq_length) 
@@ -318,7 +322,4 @@ class BERT_ARE():
     self.model.save_weights(path)
 
   def load_weights(self, path):
-    self.model.load_weights(path)
-        
-    
- 
+    self.model.load_weights(path)   
