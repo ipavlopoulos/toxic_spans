@@ -77,8 +77,8 @@ class BILSTM_ARE():
         else:
           x = TimeDistributed(Dense(self.rnn_layer_size, activation = None))(x) #hidden layer
       att_weights = tensorflow.nn.softmax(x, axis=1)
-      weighted_represantation = tensorflow.math.multiply(att_weights, rnn, name=None)
-      weighted_represantation = tensorflow.reduce_sum(weighted_represantation, axis = 1)
+      weighted_representation = tensorflow.math.multiply(att_weights, rnn, name=None)
+      weighted_representation = tensorflow.reduce_sum(weighted_represantation, axis = 1)
       pred = Dense(1, activation = None, name = 'classification')(weighted_represantation)
       self.model = Model(inputs=inputs, outputs=[pred, tensorflow.squeeze(att_weights)])
       self.model.compile(loss=[self.loss, self.dummy_loss] ,
@@ -125,7 +125,8 @@ class BILSTM_ARE():
   def predict(self, tokenized_texts):
         predictions, atts = self.model.predict(self.to_sequences(tokenized_texts))
         return predictions, atts
-
+  
+  #dev position is the ground truth of the dev set 
   def finetune_att_threshold(self, dev_tokenized_texts, dev_token_offsets, dev_position):
     f1s = []
     for th in range(0,100):
@@ -134,30 +135,34 @@ class BILSTM_ARE():
       pred_char_offsets = self.get_toxic_char_offsets(dev_token_offsets, pred_offsets)
       f1 = np.mean([semeval2021.f1(p,g) for p,g in list(zip(pred_char_offsets, dev_position))])
       f1s.append(f1)
-    best_th = np.argmax(f1s)/100
+    best_th = np.argmax(f1s)/100 #best threshold results to highest f1 score 
     print('Optimal threshold is: ',best_th, ' with F1 score = ',max(f1s))
     return best_th
 
+  #label the tokens of each sequence as toxic or not 
   def get_toxic_offsets(self, tokenized_texts, threshold=0.5):
     text_predictions, atts = self.predict(tokenized_texts)
     output = []
-    for tokens, scores in list(zip(tokenized_texts, atts)):
+    for tokens, scores in list(zip(tokenized_texts, atts)): #use the att weights to classify each token as toxic or not 
       start = 0
-      end = min(len(tokens),self.max_seq_len)
-      decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)]
+      end = min(len(tokens),self.max_seq_len) #ignore pad tokens
+      decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)] #1 if token was found toxic by the classifier else 0
       output.append(decisions)
     return output
-
+ 
+ """This function returns a list containing lists, where each list contains the char offsets of the toxic spans that were found for a given sequence
+      token_offsets: a list that contains lists, where each list contains the character offsets of each token (of a sequence)
+      toxic offsets: a list that contains lists, where each list contains the labels of all tokens (toxic or not) of a sequence
+  """
   def get_toxic_char_offsets(self, token_offsets, toxic_offsets):
     toxic_char_offsets = []
-    for i,instance in enumerate(toxic_offsets):
+    for i,instance in enumerate(toxic_offsets): #for each sequence
       instance_toxic_char_offsets = []
-      for j,token_label in enumerate(instance):
-        if token_label == 1:
-          instance_toxic_char_offsets.extend([ch for ch in token_offsets[i][j]])
+      for j,token_label in enumerate(instance): #for each token of the sequence 
+        if token_label == 1: #check if this token was found as toxic by the classifier
+          instance_toxic_char_offsets.extend([ch for ch in token_offsets[i][j]]) #add the char offsets of this token to the list of chars returned by the model 
       toxic_char_offsets.append(instance_toxic_char_offsets)
-    return toxic_char_offsets
-    
+    return toxic_char_offsets #for each sequence return a list containing the char offsets of toxic spans
     
 
 class BERT_ARE():
@@ -201,7 +206,6 @@ class BERT_ARE():
                                                             mode=self.monitor_mode)
         self.BERT = TFBertModel.from_pretrained('bert-base-cased', output_attentions = True) #, config=self.bert_config)
 
-
   #prepare inputs for bert 
   def to_bert_input(self, texts):
     input_ids, input_masks, input_segments = [],[],[]
@@ -212,8 +216,6 @@ class BERT_ARE():
       input_masks.append(inputs['attention_mask'])
       input_segments.append(inputs['token_type_ids'])
     return (np.asarray(input_ids, dtype='int32'), np.asarray(input_masks, dtype='int32'), np.asarray(input_segments, dtype='int32'))
-
-
 
   def build(self, bias=0):
         in_id = Input(shape=(self.max_seq_length,), name='input_ids', dtype='int32')
@@ -230,8 +232,7 @@ class BERT_ARE():
         if self.show_summary:
             self.model.summary()
   
-  
-  def fit(self, train_X, train_y, dev_X, dev_y, bert_weights=None, class_weights={0: 1, 1: 1}, pretrained_embeddings=None):
+  def fit(self, train_X, train_y, dev_X, dev_y, bert_weights=None):
         train_input = self.to_bert_input(train_X)
         dev_input = self.to_bert_input(dev_X)
         self.build()
@@ -253,12 +254,12 @@ class BERT_ARE():
         print('Stopped epoch: ', self.earlystop.stopped_epoch)
         return predictions
   
+  #take the average (of all heads) of the last layer for the ['CLS'] token  
   def compute_atts(self, texts, layer = 12):
     input = self.to_bert_input(texts)
     bert_atts = tensorflow.math.reduce_mean(self.BERT(input).attentions[layer-1][:,:], axis=1)[:,0,:]
     return bert_atts
   
-  #take the average (of all heads) of the last layer for the ['CLS'] token  
   def get_attentions(self, test_texts, layer = 12, batch_size = 100):
     atts = []
     counter = 0 
@@ -271,13 +272,13 @@ class BERT_ARE():
         atts.append(self.compute_atts(texts, layer = 12))
         counter = i
       counter +=1
-      if  len(test_texts)%batch_size != 0:
+      if  len(test_texts)%batch_size != 0: #do the remaininig batch 
         texts = test_texts[counter*batch_size:]
         atts.append(self.compute_atts(texts, layer = 12))
     atts = [item for sublist in atts for item in sublist] #flatten
     return atts
 
-  
+  #dev position is the ground truth of the dev set 
   def finetune_att_threshold(self, dev_texts, dev_position):
     f1s = [] #save f1s for all possible thresholds
     for th in range(0,100):
@@ -286,22 +287,27 @@ class BERT_ARE():
       pred_char_offsets = self.get_toxic_char_offsets(dev_texts, pred_offsets)
       f1 = np.mean([semeval2021.f1(p,g) for p,g in list(zip(pred_char_offsets, dev_position))])
       f1s.append(f1)
-    best_th = np.argmax(f1s)/100
+    best_th = np.argmax(f1s)/100 #best threshold results to highest f1 score 
     print("Optimal threshold is: ",best_th, " with F1 score = ",max(f1s))
     return best_th
   
+  #label the tokens of each sequence as toxic or not 
   def get_toxic_offsets(self, texts, threshold=0.5):
     att_weights = self.get_attentions(texts, layer = 12, batch_size = 100)
     output = []
     tokenized_texts = [['[CLS]'] + self.tokenizer.tokenize(text) + ['[SEP]'] for text in texts]
-    for i, scores in enumerate(att_weights):
+    for i, scores in enumerate(att_weights): #use the att weights to classify each token as toxic or not 
       start = 0  
-      end = min(len(tokenized_texts[i]),self.max_seq_length) 
-      decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)]
+      end = min(len(tokenized_texts[i]),self.max_seq_length) #ignore pad tokens
+      decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)] #1 if token was found toxic by the classifier else 0
       output.append(decisions)
     return output
 
 
+  """This function returns a list containing lists, where each list contains the char offsets of the toxic spans that were found for a given sequence
+      texts: a list that contains the test texts
+      toxic offsets: a list that contains lists, where each list contains the labels of all tokens (toxic or not) of a sequence
+  """ 
   def get_toxic_char_offsets(self, texts, toxic_offsets):
     toxic_char_offsets = []
     for i,text in enumerate(texts):
@@ -311,15 +317,16 @@ class BERT_ARE():
       for j,token_label in enumerate(toxic_offsets[i]):
         if j == 0 or j == len(toxic_offsets[i])-1:
           continue
-        if token_label == 1:
-          index_of_word = tokenized_text.token_to_word(j)
-          (start, end) = tokenized_text.word_to_chars(index_of_word)
-          instance_toxic_char_offsets.extend([ch for ch in range(start,end)])
-      toxic_char_offsets.append(set(instance_toxic_char_offsets)) 
+        if token_label == 1:  #if token (or subtoken) was found toxic by the classifier
+          index_of_word = tokenized_text.token_to_word(j) #get the index of the word in the sequence 
+          (start, end) = tokenized_text.word_to_chars(index_of_word) #get the char offsets of the first and last chars of this token (subtoken)
+          instance_toxic_char_offsets.extend([ch for ch in range(start,end)]) #add the char offsets of this token (subtoken) to the list
+      toxic_char_offsets.append(set(instance_toxic_char_offsets)) #set removes the duplicates char offsets (if a subtoken was found toxic, we add the char offsets of the whole word)
     return toxic_char_offsets
 
   def save_weights(self, path):
     self.model.save_weights(path)
 
   def load_weights(self, path):
-    self.model.load_weights(path)   
+    self.model.load_weights(path)
+        
