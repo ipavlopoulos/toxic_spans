@@ -21,6 +21,11 @@ from transformers import BertTokenizer, TFBertModel, BertConfig, PreTrainedToken
 from transformers import BertTokenizerFast,  BatchEncoding
 from tokenizers import Encoding
 
+"""
+BILSTM with deep self attention toxicity classifier.
+To detect toxic spans, we used the attention scores. We obtain a sequence of binary decisions (toxic, non-toxic) for the tokens of the post (inherited by their
+character offsets) by using a probability threshold (tuned on development data) applied to the attention scores. 
+"""
 class BILSTM_ARE():
   def __init__(self,
                rnn_layer_size = 128,
@@ -165,6 +170,12 @@ class BILSTM_ARE():
     return toxic_char_offsets #for each sequence return a list containing the char offsets of toxic spans
     
 
+"""
+Bert toxicity classifier.
+To detect toxic spans, we used the attention scores (from the ['CLS'] to the other tokens) from the heads of BERT’s last layer averaged
+over the heads, respectively. We obtain a sequence of binary decisions (toxic, non-toxic) for the tokens of the post (inherited by their
+character offsets) by using a probability threshold (tuned on development data) applied to the attention scores. 
+"""
 class BERT_ARE():
 
   def __init__(self,
