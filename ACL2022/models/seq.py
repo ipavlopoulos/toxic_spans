@@ -309,7 +309,7 @@ class BERT_SEQ():
     train_input = self.to_bert_input(train_X)
     val_input = self.to_bert_input(val_X)
     train_y = pad_sequences(maxlen=self.max_seq_length, sequences=train_y, padding='post', value=0.0, dtype='float32')
-    val_y = pad_sequences(maxlen=self.max_seq_length, sequences=dev_y, padding='post', value=0.0, dtype='float32')
+    val_y = pad_sequences(maxlen=self.max_seq_length, sequences=val_y, padding='post', value=0.0, dtype='float32')
     self.build()
     history = self.model.fit(train_input,
                              train_y,
