@@ -356,7 +356,7 @@ class BERT_SEQ():
       instance_toxic_char_offsets = []
       tokenized_batch : BatchEncoding = self.tokenizer(text)
       tokenized_text :Encoding = tokenized_batch[0]
-      tokens = ['CLS'] + model.tokenizer.tokenize(text) + ['SEP']
+      tokens = ['CLS'] + self.tokenizer.tokenize(text) + ['SEP']
       for j,token_label in enumerate([0] + toxic_offsets[i] + [0]): #adding 2 pseudo labels for 'CLS' and 'SEP' tokens
         if j == 0 or (j == len(tokens)-1 and len(tokens) <= self.max_seq_length): #ignore ['CLS'] and ['SEP'] tokens
           continue
