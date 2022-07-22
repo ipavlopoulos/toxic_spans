@@ -415,9 +415,10 @@ class BERT_ARE():
       instance_toxic_char_offsets = []
       tokenized_batch : BatchEncoding = self.tokenizer(text)
       tokenized_text :Encoding = tokenized_batch[0]
+      tokens = ['CLS'] + self.tokenizer.tokenize(text) + ['SEP']
       for j,token_label in enumerate(toxic_offsets[i]):
-        if j == 0 or j == len(toxic_offsets[i])-1:
-          continue
+        if j == 0 or (j == len(tokens)-1 and len(tokens) <= self.max_seq_length): #ignore ['CLS'] and ['SEP'] tokens
+            continue
         if token_label == 1:  #if token (or subtoken) was found toxic by the classifier
           index_of_word = tokenized_text.token_to_word(j) #get the index of the word in the sequence 
           (start, end) = tokenized_text.word_to_chars(index_of_word) #get the char offsets of the first and last chars of this token (subtoken)
@@ -430,4 +431,3 @@ class BERT_ARE():
 
   def load_weights(self, path):
     self.model.load_weights(path)
-        
