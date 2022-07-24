@@ -189,7 +189,6 @@ class BERT_SEQ():
                  show_summary=False,
                  patience=3,
                  epochs=100,
-                 save_predictions=False,
                  batch_size=32,
                  lr=2e-05,
                  session=None,
@@ -209,7 +208,6 @@ class BERT_SEQ():
         self.max_seq_length = max_seq_length
         self.show_summary = show_summary
         self.patience=patience
-        self.save_predictions = save_predictions
         self.epochs = epochs
         self.METRICS = METRICS
         self.loss = loss
@@ -239,23 +237,23 @@ class BERT_SEQ():
       token_labels = []
       tokenized_batch : BatchEncoding = tokenizer(data.iloc[i].text_of_post)
       tokenized_text :Encoding = tokenized_batch[0]
-      tokens = tokenizer.tokenize(data.iloc[i].text_of_post)
-      for j,token in enumerate(tokens):  
+      tokens = ['[CLS]'] + tokenizer.tokenize(data.iloc[i].text_of_post) + ['[SEP]']
+      for j,token in enumerate(tokens):
         if j == 0 or j == len(tokens) - 1: #ignore ['CLS'] and ['SEP'] tokens
-          continue
-        (start, end) = tokenized_text.token_to_chars(j) #char offset of jth sub-token (in the original text)
-        span_score = []
-        for ch_offset in range(start,end):
-          if ch_offset in data.iloc[i].position_probability.keys():
-            span_score.append(data.iloc[i].position_probability[ch_offset])
-          else:
-            span_score.append(0)
-        token_labels.append(np.mean(span_score))
-        subtokens.append(token)
+         continue
+        else:
+          (start, end) = tokenized_text.token_to_chars(j) #char offset of jth sub-token (in the original text)
+          span_score = []
+          for ch_offset in range(start,end):
+            if ch_offset in data.iloc[i].position_probability.keys():
+              span_score.append(data.iloc[i].position_probability[ch_offset])
+            else:
+              span_score.append(0)
+          token_labels.append(np.mean(span_score))
+          subtokens.append(token)
       x.append(subtokens)
       y.append(token_labels)
     return x, y
-
 
   def to_bert_input(self, texts):
     """ 
@@ -271,7 +269,6 @@ class BERT_SEQ():
       input_masks.append(inputs['attention_mask'])
       input_segments.append(inputs['token_type_ids'])
     return (np.asarray(input_ids, dtype='int32'), np.asarray(input_masks, dtype='int32'), np.asarray(input_segments, dtype='int32'))
-
 
   def build(self):
     """
@@ -322,10 +319,10 @@ class BERT_SEQ():
     return history
 
   def predict(self, texts):
-        test_input = self.to_bert_input(texts)
-        predictions = self.model.predict(test_input)
-        print('Stopped epoch: ', self.earlystop.stopped_epoch)
-        return [p.flatten() for p in predictions]
+    test_input = self.to_bert_input(texts)
+    predictions = self.model.predict(test_input)
+    print('Stopped epoch: ', self.earlystop.stopped_epoch)
+    return [p.flatten() for p in predictions]
   
   #label the tokens of each sequence  as toxic or not 
   def get_toxic_offsets(self, texts, threshold=0.5):
@@ -338,10 +335,10 @@ class BERT_SEQ():
 
     text_predictions = self.predict(texts)
     output = []
-    tokenized_texts = [['CLS'] + self.tokenizer.tokenize(text) + ['SEP'] for text in texts]
+    tokenized_texts = [self.tokenizer.tokenize(text) for text in texts]
     for tokens, scores in list(zip(tokenized_texts, text_predictions)):
-      start = 0
-      end = min(len(tokens),self.max_seq_length) #ignore pad tokens 
+      start = 0 #ignore predictions for cls token #0
+      end = min(len(tokens),self.max_seq_length) #ignore pad tokens and sep token 
       decisions = [1 if scores[i]>threshold else 0 for i in range(start, end)] #1 if token was found toxic by the classifier else 0
       output.append(decisions)
     return output
@@ -359,8 +356,9 @@ class BERT_SEQ():
       instance_toxic_char_offsets = []
       tokenized_batch : BatchEncoding = self.tokenizer(text)
       tokenized_text :Encoding = tokenized_batch[0]
-      for j,token_label in enumerate(toxic_offsets[i]):
-        if j == 0 or j == len(toxic_offsets[i]) - 1: #ignore ['CLS'] and ['SEP'] tokens
+      tokens = ['CLS'] + self.tokenizer.tokenize(text) + ['SEP']
+      for j,token_label in enumerate([0] + toxic_offsets[i] + [0]): #adding 2 pseudo labels for 'CLS' and 'SEP' tokens
+        if j == 0 or (j == len(tokens)-1 and len(tokens) <= self.max_seq_length): #ignore ['CLS'] and ['SEP'] tokens
           continue
         if token_label == 1: #if token (or subtoken) was found toxic by the classifier
           index_of_word = tokenized_text.token_to_word(j) #get the index of the word in the sequence 
@@ -368,7 +366,7 @@ class BERT_SEQ():
           instance_toxic_char_offsets.extend([ch for ch in range(start,end)]) #add the char offsets of this token (subtoken) to the list
       toxic_char_offsets.append(set(instance_toxic_char_offsets)) #set removes the duplicates char offsets (if a subtoken was found toxic, we add the char offsets of the whole word)
     return toxic_char_offsets
-
+  
   def save_weights(self, path):
     self.model.save_weights(path)
 
