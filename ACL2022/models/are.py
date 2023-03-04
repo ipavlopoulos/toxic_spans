@@ -20,6 +20,7 @@ from tensorflow.keras.metrics import MeanSquaredError, MeanAbsoluteError, MeanSq
 from transformers import BertTokenizer, TFBertModel, BertConfig, PreTrainedTokenizerFast
 from transformers import BertTokenizerFast,  BatchEncoding
 from tokenizers import Encoding
+from toxic_spans.SemEval2021.evaluation import semeval2021
 
 class BILSTM_ARE():
   """
